@@ -16,6 +16,8 @@ import {
   View,
 } from "react-native";
 
+import { api } from "@/convex/_generated/api";
+import { useMutation } from "convex/react";
 import { Image } from "expo-image";
 
 export default function CreateScreen() {
@@ -34,6 +36,46 @@ export default function CreateScreen() {
       quality: 0.8,
     });
     if (!result.canceled) setSelectedImage(result.assets[0].uri);
+  };
+
+  const generateUploadUrl = useMutation(api.posts.generateUploadUrl);
+  const createPost = useMutation(api.posts.createPost);
+
+  const handleShare = async () => {
+    if (!selectedImage) return;
+
+    try {
+      setIsSharing(true);
+      const uploadUrl = await generateUploadUrl();
+
+      const formData = new FormData();
+      formData.append("file", {
+        uri: selectedImage,
+        name: "photo.jpg",
+        type: "image/jpeg",
+      } as any);
+
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (response.status !== 200) throw new Error("Upload failed");
+
+      const { storageId } = await response.json();
+      await createPost({ storageId, caption });
+      setSelectedImage(null);
+      setCaption("");
+
+      router.push("/(tabs)");
+    } catch (error) {
+      console.log("Error sharing post", error);
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   if (!selectedImage) {
@@ -85,6 +127,7 @@ export default function CreateScreen() {
               styles.shareButton,
               isSharing && styles.shareButtonDisabled,
             ]}
+            onPress={handleShare}
           >
             {isSharing ? (
               <ActivityIndicator size="small" color={COLORS.primary} />
